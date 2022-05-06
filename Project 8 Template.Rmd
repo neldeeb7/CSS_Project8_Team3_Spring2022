@@ -15,9 +15,15 @@ pacman::p_load(
   caret,
   dagitty,
   ggdag,
-  here)
+  here, 
+  ranger, 
+  kernlab)
+
+
 
 heart_disease <- read_csv(here('heart_disease_tmle.csv'))
+
+set.seed(10)
 ```
 
 # Introduction
@@ -65,16 +71,137 @@ Fit a SuperLearner model to estimate the probability of someone dying from compl
 # Fit SuperLearner Model
 
 ## sl lib
+listWrappers()
+# chose SL.mean, SL.glmnet (lasso & ridge),SL.ranger (random forest), SL.ksvm (support vector machine), SL.step
+```
 
+```{r}
 ## Train/Test split
+heart_disease_split <- initial_split(heart_disease, prop = 3/4)
 
-## Train SuperLearner
+# Declare the training set with rsample::training()
+train <- training(heart_disease_split)
 
+# y_train 
+y_train <- train$mortality
+#y_train<- train %>% mortality 
+
+# x_train is everything but the outcome NE: and took out time point 2 variables  
+x_train <- train %>%
+  select(-mortality, -bmi_2, -blood_pressure_2, -chol_2, -blood_pressure_medication_2)
+
+# Do the same procedure with the test set
+test <- testing(heart_disease_split)
+
+y_test <- test$mortality
+#y_test<- test %>% mortality 
+
+x_test <- test %>%
+  select(-mortality, -bmi_2, -blood_pressure_2, -chol_2, -blood_pressure_medication_2)
+
+```
+
+
+```{r}
+## Train discrete SuperLearner algorithms
 ## Risk and Coefficient of each model
 
-## Discrete winner and superlearner ensemble performance
+# All coefficients are 1 since these are discrete algorithms 
 
+#SL.mean, SL.glmnet, SL.ranger, SL.ksvm, SL.step
+
+sl_mean <- SuperLearner(Y = y_train,
+                         X = x_train,
+                         family = binomial(),
+                         SL.library = "SL.mean")
+sl_mean
+# Risk of sl_mean: 0.2362453
+
+sl_glmnet <- SuperLearner(Y = y_train,
+                         X = x_train,
+                         family = binomial(),
+                         SL.library = "SL.glmnet")
+sl_glmnet
+# Risk of sl_glmnet: 0.2362453  
+
+sl_ranger <- SuperLearner(Y = y_train,
+                         X = x_train,
+                         family = binomial(),
+                         SL.library = "SL.ranger")
+sl_ranger
+# Risk of sl_ranger: 0.2310091   #NE: IS THIS THE WINNER BECAUSE IT HAS THE LOWEST RISK?
+
+sl_ksvm <- SuperLearner(Y = y_train,
+                         X = x_train,
+                         family = binomial(),
+                         SL.library = "SL.ksvm")
+
+sl_ksvm
+# Risk of sl_kvsm: 0.2322576
+
+
+sl_step <- SuperLearner(Y = y_train,
+                         X = x_train,
+                         family = binomial(),
+                         SL.library = "SL.step")
+sl_step
+# Risk of sl_step: 0.236376
+
+```
+
+
+```{r}
+
+## Train SuperLearner ensemble/multiple models
+
+sl = SuperLearner(Y = y_train,
+                  X = x_train,
+                  family = binomial(),
+                  SL.library = c('SL.mean',
+                                 'SL.glmnet',
+                                 'SL.ranger', 
+                                 'SL.ksvm', 
+                                 'SL.step'))
+sl
+
+## Risk and Coefficient of ensemble
+#Risk       Coef
+#SL.mean_All   0.2497478 0.00000000
+#SL.glmnet_All 0.2362772 0.04678073
+#SL.ranger_All 0.2313725 0.51984445  #NE: IS THIS THE WINER BECAUSE IT HAS THE LOWEST RISK?
+#SL.ksvm_All   0.2317301 0.43337481
+#SL.step_All   0.2364693 0.00000000
+
+```
+
+
+```{r}
+#Validation - to compare predictions against true observations 
+preds <- predict(sl,
+                 x_test,
+                 onlySL = TRUE)
+
+# start with y_test
+validation <- y_test %>%
+  # add our predictions
+  bind_cols(preds$pred[,1]) %>%
+  # rename columns
+  rename(obs = `...1`,
+         pred = `...2`) %>%
+  mutate(pred = ifelse(pred >= .5, 
+                           1,
+                           0))
+
+head(validation)
+```
+
+```{r}
 ## Confusion Matrix
+caret::confusionMatrix(as.factor(validation$pred),
+                       as.factor(validation$obs))
+
+#Accuracy: 0.588
+#NE: WHERE DO I GET THE RECALL AND PRECISION? WAITING FOR KQ RESPONSE
 ```
 
 ## Discussion Questions
@@ -82,6 +209,7 @@ Fit a SuperLearner model to estimate the probability of someone dying from compl
 \begin{enumerate}
     \item Why should we, in general, prefer the SuperLearner ensemble to the discrete winner in cross-validation? Or in other words, what is the advantage of "blending" algorithms together and giving them each weights, rather than just using the single best algorithm (with best being defined as minimizing risk)?
 \end{enumerate}
+NE: STILL NEED TO ANSWER THIS 
 
 # Targeted Maximum Likelihood Estimation
 
