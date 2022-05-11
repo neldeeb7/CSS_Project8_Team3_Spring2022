@@ -225,7 +225,138 @@ TMLE requires estimating two models:
 Using ggdag and daggity, draw a directed acylcic graph (DAG) that describes the relationships between the outcome, treatment, and covariates/predictors. Note, if you think there are covariates that are not related to other variables in the dataset, note this by either including them as freestanding nodes or by omitting them and noting omissions in your discussion.
 
 ```{r}
-# DAG for TMLE
+pretty_dag <- function(dag) {
+  nodes <- unique(dag$data$name)
+  old_x <- unique(dag$data$x)
+  old_y <- unique(dag$data$y)
+  num_nodes <- length(nodes)
+  num_ws <- sum(str_detect(nodes, "^W"))
+  
+  for(i in 1:num_nodes) {
+    if (nodes[i] == "A") {
+      new_y <- 0
+      new_x <- 0
+    } else if (str_detect(nodes[i], "^U_A")) {
+      new_y <- 2
+      new_x <- 0
+    } else if (nodes[i] == "Y") {
+      new_y <- 0
+      new_x <- 2*(num_ws + 1)
+    } else if (str_detect(nodes[i], "^U_Y")) {
+      new_y <- 2
+      new_x <- 2*(num_ws + 1)
+    } else if (nodes[i] == "Z") {
+      new_y <- 0
+      new_x <- -1
+    } else if (str_detect(nodes[i], "^U_Z")) {
+      new_y <- 2
+      new_x <- -1
+    } else if (nodes[i] == "U") {
+      new_y <- 2*(num_ws + 1)
+      new_x <- num_ws + 1
+    } else if (str_detect(nodes[i], "^W")) {
+      w_num <- as.numeric(str_remove(nodes[i], "W"))
+      if (is.na(w_num)) {
+        new_y <- 2
+        new_x <- 2
+      } else {
+        new_y <- 2*min(abs(0-w_num), abs(num_ws+1-w_num))
+        new_x <- 2*w_num
+      }
+    } else if (str_detect(nodes[i], "^U_W")) {
+      u_num <- as.numeric(str_remove(nodes[i], "U_W"))
+      if (is.na(u_num)) {
+        new_y <- 4
+        new_x <- 1
+      } else {
+        new_y <- 2*min(abs(0-u_num), abs(num_ws+1-u_num)) + 2
+        new_x <- 2*u_num
+      }
+    }
+    
+    dag$data <- dag$data %>%
+      mutate(x = replace(x, x == old_x[i], new_x),
+             y = replace(y, y == old_y[i], new_y),
+             xend = replace(xend, xend == old_x[i], new_x),
+             yend = replace(yend, yend == old_y[i], new_y),)
+  }
+  
+  dag <- dag %>%
+    mutate(color = ifelse(str_detect(name, "^[A|Y|Z]"), 
+                          name, 
+                          ifelse(str_detect(name, "^W"), 
+                                 "W", 
+                                 "U")),
+           circular = TRUE)
+  return(dag)
+}
+  
+  
+# DAG for TMLE, THE OUTCOME MODEL
+dagify(Y ~ A,
+        Y ~ W1,
+        Y ~ W2,
+        Y ~ W3,
+        Y ~ W4,
+        Y ~ W5,
+        Y ~ W6,
+        Y ~ W7,
+        Y ~ W8,
+        
+        W6 ~ W4,
+        W7 ~ W4,
+        W8 ~ W4,
+        
+        W6 ~ W5,
+        W7 ~ W5,
+        W8 ~ W5,
+        
+        W5 ~ W6,
+        
+        A ~ W8,
+     
+       exposure = "A",
+       outcome = "Y") %>%
+  tidy_dagitty() %>%
+  pretty_dag() %>%
+  ggdag() +
+  geom_dag_edges() +
+  geom_dag_node(aes(color = color)) +
+  geom_dag_text(col = "white") +
+  theme(legend.position = "none") +
+  scale_color_manual(values=c("darkred", "lightgrey", "darkgrey"))
+
+# DAG for TMLE, THE TREATMENT MODEL
+dagify(A ~ W1,
+       A ~ W2,
+       A ~ W3,
+       A ~ W4,
+       A ~ W5,
+       A ~ W6,
+       A ~ W7,
+       A ~ W8,
+       
+       W6 ~ W4,
+       W7 ~ W4,
+       W8 ~ W4,
+       
+       W6 ~ W5,
+       W7 ~ W5,
+       W8 ~ W5,
+       
+       W5 ~ W6,
+
+       exposure = "W8",
+       outcome = "A") %>%
+  tidy_dagitty() %>%
+  pretty_dag() %>%
+  ggdag() +
+  geom_dag_edges() +
+  geom_dag_node(aes(color = color)) +
+  geom_dag_text(col = "white") +
+  theme(legend.position = "none") +
+  scale_color_manual(values=c("darkred", "lightgrey"))
+
 ```
 
 ## TMLE Estimation
@@ -238,10 +369,107 @@ Use the `tmle` package to estimate a model for the effect of blood pressure medi
     \item Report the average treatment effect and any other relevant statistics
 \end{enumerate}
 
+
+```{r}
+data_obs <- heart_disease %>%
+rename(Y = mortality) %>%
+rename(A = blood_pressure_medication) %>%
+select(Y, A, bmi, chol, blood_pressure, college_educ, simplified_race, income_thousands, sex_at_birth, age)
+
+sl_libs <- c('SL.glmnet', 'SL.ranger', 'SL.mean', 'SL.ksvm', 'SL.step')
+
+# Data Prep
+  # Outcome
+Y <- data_obs %>% pull(Y)
+  # Covariates
+W_A <- data_obs %>% select(-Y)
+  # Fit SL for Q step, initial estimate of the outcome
+Q <- SuperLearner(Y = Y,
+X = W_A,
+family = binomial(),
+SL.library = sl_libs)
+```
+
+
+```{r}
+dat_tmle <- tibble(Y = Y, A = W_A$A, Q_A, Q_0, Q_1)
+head(dat_tmle)
+```
+
+
+```{r}
+ate_gcomp <- mean(dat_tmle$Q_1 - dat_tmle$Q_0)
+ate_gcomp
+```
+
+
+```{r}
+A <- W_A$A
+W <- heart_disease %>% select(bmi, chol, blood_pressure, college_educ, simplified_race, income_thousands, sex_at_birth, age)
+g <- SuperLearner(Y = A,
+X = W,
+family=binomial(),
+SL.library=sl_libs)
+
+
+# Prediction for probability of treatment
+g_w <- as.vector(predict(g)$pred) # Pr(A=1|W)
+# probability of treatment
+H_1 <- 1/g_w
+# probability of control
+H_0 <- -1/(1-g_w)
+
+dat_tmle <- # add clever covariate data to dat_tmle
+dat_tmle %>%
+bind_cols(
+H_1 = H_1,
+H_0 = H_0) %>%
+mutate(H_A = case_when(A == 1 ~ H_1,
+A == 0 ~ H_0))
+```
+
+
+```{r}
+glm_fit <- glm(Y ~ -1 + offset(qlogis(Q_A)) + H_A, data=dat_tmle, family=binomial)
+eps <- coef(glm_fit)
+```
+
+
+```{r}
+H_A <- dat_tmle$H_A
+Q_A_update <- plogis(qlogis(Q_A) + eps*H_A)
+Q_1_update <- plogis(qlogis(Q_1) + eps*H_1)
+Q_0_update <- plogis(qlogis(Q_0) + eps*H_0)
+```
+
+
+```{r}
+tmle_ate <- mean(Q_1_update - Q_0_update)
+tmle_ate
+```
+
+
+```{r}
+infl_fn <- (Y - Q_A_update) * H_A + Q_1_update - Q_0_update - tmle_ate
+tmle_se <- sqrt(var(infl_fn)/nrow(data_obs))
+conf_low <- tmle_ate - 1.96*tmle_se
+conf_high <- tmle_ate + 1.96*tmle_se
+pval <- 2 * (1 - pnorm(abs(tmle_ate / tmle_se)))
+
+tmle_fit <-
+  tmle::tmle(Y = Y,
+  A = A,
+  W = W,
+  Q.SL.library = sl_libs,
+  g.SL.library = sl_libs)
+tmle_fit
+```
+
+
 ## Discussion Questions
 
 \begin{enumerate}
-    \item What is a "double robust" estimator? Why does it provide a guarantee of consistency if either the outcome model or propensity score model is correctly specified? Or in other words, why does mispecifying one of the models not break the analysis? \textbf{Hint}: When answering this question, think about how your introductory statistics courses emphasized using theory to determine the correct outcome model, and in this course how we explored the benefits of matching.
+    \item What is a "double robust" estimator? Why does it provide a guarantee of consistency if either the outcome model or propensity score model is correctly specified? Or in other words, why does misspecifying one of the models not break the analysis? \textbf{Hint}: When answering this question, think about how your introductory statistics courses emphasized using theory to determine the correct outcome model, and in this course how we explored the benefits of matching.
 \end{enumerate}
 
 # LTMLE Estimation
