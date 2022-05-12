@@ -1,6 +1,8 @@
 ---
 title: "Project 8 Template"
-output: pdf_document
+output:
+  word_document: default
+  pdf_document: default
 ---
 
 ```{r}
@@ -416,23 +418,63 @@ Update your causal diagram to incorporate this new information. \textbf{Note}: I
 
 \textbf{Hint}: Keep in mind that any of the variables that end in "\_2" are likely affected by both the previous covariates and the first treatment when drawing your DAG.
 
+Directed Acyclic Graphs (DAGs) are used to visually demonstrate causal pathways between our variables: our outcome of interest, exposure(s), and various observed covariates (and sometimes, DAGs are used to show hypothesized relationships with unobserved covariates as well). For the LTMLE, we needed to address time-varying confounders and add a second time point to our exposure. We worried that adding in all of these covariates would generate a very complex DAG that would be difficult to comprehend. As indicated in our TMLE DAG above, we believe that all of the covariates in our dataset are likely important to consider in our causal model. So, to maintain readability, we collapsed our covariates in the following way:  
+
+W0: represents individuals' fixed effects, or those covariates which are unlikely to change between our two data collection time points (sex assigned at birth, simplified race, household income, and college attendance),  
+
+W1: represents the health metrics collected at time point 1 (BMI status, cholesterol, blood pressure, and age),  
+
+W2: represents these same health metrics collected at time point 2,  
+
+A1: represents the exposure at time point 1 (whether or not an individual takes blood pressure medication), and  
+
+A2: represents the exposure at time point 2.
+
 ```{r}
-# DAG for TMLE
+# Start by setting coordinates for the nodes in the DAG
+coords <- list(
+  x = c(W0 = 1, W1 = 2, W2 = 3, A1 = 1.5, A2 = 2.5, Y = 3.5),
+  y = c(W0 = 2.2, W1 = 2, W2 = 2, A1 = 1, A2 = 1, Y = 1))
+
+# Then, create the Dag using gagify
+LTMLE_dag <- dagify(
+Y ~ A2,
+Y ~ W0,
+Y ~ W2,
+W2 ~ W1,
+W2 ~ W0,
+W1 ~ W0,
+A1 ~ W0,
+A1 ~ W1,
+A2 ~ A1,
+A2 ~ W0,
+A2 ~ W2,
+coords = coords)
+
+ggdag::ggdag(LTMLE_dag) + theme_dag()
 ```
+
+
 
 ## LTMLE Estimation
 
 Use the `ltmle` package for this section. First fit a "naive model" that \textbf{does not} control for the time-dependent confounding. Then run a LTMLE model that does control for any time dependent confounding. Follow the same steps as in the TMLE section. Do you see a difference between the two estimates?
 
 ```{r}
-## Naive Model (no time-dependent confounding) estimate
+## Data Set-Up
+
+
+## Naive Model (no time-dependent confounding) estimat
+
 
 ## LTMLE estimate
+
 ```
 
 ## Discussion Questions
 
 \begin{enumerate}
     \item What sorts of time-dependent confounding should we be especially worried about? For instance, would we be concerned about a running variable for age the same way we might be concerned about blood pressure measured at two different times?
-\end{enumerate}
+\end{enumerate} 
 
+We would be most concerned about time-dependent confounders that do not change at the same rate across groups. So, in this example, we wouldn't be particularly concerned about a running variable for something like age, because this variable will change consistently across both groups: therefore, the common trends assumption is not violated. However, something that may change considerably across time across both groups may generate cause for greater concern, such as blood pressure measured at two different time points. 
