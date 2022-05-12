@@ -382,89 +382,21 @@ sl_libs <- c('SL.glmnet', 'SL.ranger', 'SL.mean', 'SL.ksvm', 'SL.step')
   # Outcome
 Y <- data_obs %>% pull(Y)
   # Covariates
-W_A <- data_obs %>% select(-Y)
-  # Fit SL for Q step, initial estimate of the outcome
-Q <- SuperLearner(Y = Y,
-X = W_A,
-family = binomial(),
-SL.library = sl_libs)
+A <- data_obs %>% pull(A)
+W <- data_obs %>% select(-c(Y, A))
+  
 ```
 
 
 ```{r}
-dat_tmle <- tibble(Y = Y, A = W_A$A, Q_A, Q_0, Q_1)
-head(dat_tmle)
-```
-
-
-```{r}
-ate_gcomp <- mean(dat_tmle$Q_1 - dat_tmle$Q_0)
-ate_gcomp
-```
-
-
-```{r}
-A <- W_A$A
-W <- heart_disease %>% select(bmi, chol, blood_pressure, college_educ, simplified_race, income_thousands, sex_at_birth, age)
-g <- SuperLearner(Y = A,
-X = W,
-family=binomial(),
-SL.library=sl_libs)
-
-
-# Prediction for probability of treatment
-g_w <- as.vector(predict(g)$pred) # Pr(A=1|W)
-# probability of treatment
-H_1 <- 1/g_w
-# probability of control
-H_0 <- -1/(1-g_w)
-
-dat_tmle <- # add clever covariate data to dat_tmle
-dat_tmle %>%
-bind_cols(
-H_1 = H_1,
-H_0 = H_0) %>%
-mutate(H_A = case_when(A == 1 ~ H_1,
-A == 0 ~ H_0))
-```
-
-
-```{r}
-glm_fit <- glm(Y ~ -1 + offset(qlogis(Q_A)) + H_A, data=dat_tmle, family=binomial)
-eps <- coef(glm_fit)
-```
-
-
-```{r}
-H_A <- dat_tmle$H_A
-Q_A_update <- plogis(qlogis(Q_A) + eps*H_A)
-Q_1_update <- plogis(qlogis(Q_1) + eps*H_1)
-Q_0_update <- plogis(qlogis(Q_0) + eps*H_0)
-```
-
-
-```{r}
-tmle_ate <- mean(Q_1_update - Q_0_update)
-tmle_ate
-```
-
-
-```{r}
-infl_fn <- (Y - Q_A_update) * H_A + Q_1_update - Q_0_update - tmle_ate
-tmle_se <- sqrt(var(infl_fn)/nrow(data_obs))
-conf_low <- tmle_ate - 1.96*tmle_se
-conf_high <- tmle_ate + 1.96*tmle_se
-pval <- 2 * (1 - pnorm(abs(tmle_ate / tmle_se)))
-
 tmle_fit <-
-  tmle::tmle(Y = Y,
-  A = A,
-  W = W,
-  Q.SL.library = sl_libs,
-  g.SL.library = sl_libs)
+tmle::tmle(Y = Y,
+A = A,
+W = W,
+Q.SL.library = sl_libs,
+g.SL.library = sl_libs)
 tmle_fit
 ```
-
 
 ## Discussion Questions
 
