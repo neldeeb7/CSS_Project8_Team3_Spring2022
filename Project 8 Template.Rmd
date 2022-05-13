@@ -74,7 +74,7 @@ Fit a SuperLearner model to estimate the probability of someone dying from compl
 
 ## sl lib
 listWrappers()
-# chose SL.mean, SL.glmnet (lasso & ridge),SL.ranger (random forest), SL.ksvm (support vector machine), SL.step
+# We chose SL.mean, SL.glmnet (lasso & ridge),SL.ranger (random forest), SL.ksvm (support vector machine), SL.step
 ```
 
 ```{r}
@@ -88,7 +88,7 @@ train <- training(heart_disease_split)
 y_train <- train$mortality
 #y_train<- train %>% mortality 
 
-# x_train is everything but the outcome NE: and took out time point 2 variables  
+# x_train is everything but the outcome and taking out time point 2 variables  
 x_train <- train %>%
   select(-mortality, -bmi_2, -blood_pressure_2, -chol_2, -blood_pressure_medication_2)
 
@@ -131,7 +131,7 @@ sl_ranger <- SuperLearner(Y = y_train,
                          family = binomial(),
                          SL.library = "SL.ranger")
 sl_ranger
-# Risk of sl_ranger: 0.2310091   #NE: IS THIS THE WINNER BECAUSE IT HAS THE LOWEST RISK?
+# Risk of sl_ranger: 0.2310091  
 
 sl_ksvm <- SuperLearner(Y = y_train,
                          X = x_train,
@@ -167,12 +167,14 @@ sl = SuperLearner(Y = y_train,
 sl
 
 ## Risk and Coefficient of ensemble
-#Risk       Coef
+              #Risk       Coef
 #SL.mean_All   0.2497478 0.00000000
 #SL.glmnet_All 0.2362772 0.04678073
-#SL.ranger_All 0.2313725 0.51984445  #NE: IS THIS THE WINER BECAUSE IT HAS THE LOWEST RISK?
+#SL.ranger_All 0.2313725 0.51984445  
 #SL.ksvm_All   0.2317301 0.43337481
-#SL.step_All   0.2364693 0.00000000
+#SL.step_All   0.2364693 0.00000000'
+
+#The winner is SL.ranger as it has the lowest risk and highest coefficient. 
 
 ```
 
@@ -203,7 +205,8 @@ caret::confusionMatrix(as.factor(validation$pred),
                        as.factor(validation$obs))
 
 #Accuracy: 0.588
-#NE: WHERE DO I GET THE RECALL AND PRECISION? WAITING FOR KQ RESPONSE
+#Precision (positive predictive value): 0.6698
+#Recall (sensitivity): 0.2976
 ```
 
 ## Discussion Questions
@@ -211,7 +214,7 @@ caret::confusionMatrix(as.factor(validation$pred),
 \begin{enumerate}
     \item Why should we, in general, prefer the SuperLearner ensemble to the discrete winner in cross-validation? Or in other words, what is the advantage of "blending" algorithms together and giving them each weights, rather than just using the single best algorithm (with best being defined as minimizing risk)?
 \end{enumerate}
-NE: STILL NEED TO ANSWER THIS 
+We should prefer using SuperLearner ensemble instead of one discrete algorithm because the ensemble approach is more data adaptive and decreases the bias of the estimator. If we use one single mis-specified estimator, we may get biased estimates and misleading findings. The SuperLearner ensemble allows us to test multiple algorithms at the same time to determine which performs the best and combines best-performing algorithms to allow for the best prediction and estimates (minimizing risk). 
 
 # Targeted Maximum Likelihood Estimation
 
