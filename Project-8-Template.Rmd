@@ -468,16 +468,64 @@ ggdag::ggdag(LTMLE_dag) + theme_dag()
 
 Use the `ltmle` package for this section. First fit a "naive model" that \textbf{does not} control for the time-dependent confounding. Then run a LTMLE model that does control for any time dependent confounding. Follow the same steps as in the TMLE section. Do you see a difference between the two estimates?
 
-```{r}
-## Data Set-Up
+```{r warning = FALSE, message = FALSE}
+## Naive Model
 
+# Data Set-Up
+data_obs_naiveltmle <- heart_disease %>%
+rename(Y = mortality) %>%
+rename(A = blood_pressure_medication) %>%
+select(Y, A, sex_at_birth, simplified_race, income_thousands, college_educ, bmi, chol, blood_pressure, age)
 
-## Naive Model (no time-dependent confounding) estimat
+Y <- data_obs_naiveltmle %>% pull(Y)
+A <- data_obs_naiveltmle %>% pull(A)
+W <- data_obs_naiveltmle %>% select(-c(Y, A))
+  
+# Note: I removed the "SL.ksvm" wrapper because this caused the run time for this code chunk to exceed 3 hours. If we were conducting this analysis in real life, we would include the full set of SuperLearner algorithms for consistency throughout the phases of our analysis. 
+#sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.ksvm', 'SL.step')
+sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.step')
 
+# Naive Model Estimate
+naive_df <- data.frame(W, A, Y)
+naive_ltmle_result <- ltmle(naive_df, Anodes = "A", Lnodes = NULL, Ynodes = "Y", abar=1, SL.library = sl_libs)
 
-## LTMLE estimate
-
+summary(naive_ltmle_result)
 ```
+
+
+```{r, message=FALSE, warning=FALSE}
+## LTMLE Model
+
+# Data Set-Up
+data_obs_ltmle <- heart_disease %>%
+rename(Y = mortality) %>%
+rename(A1 = blood_pressure_medication) %>%
+rename(A2 = blood_pressure_medication_2) %>%
+rename(L1 = bmi_2) %>%
+rename(L2 = chol_2) %>%
+rename(L3 = blood_pressure_2) %>%
+select(Y, A1, L1, L2, L3, A2, sex_at_birth, simplified_race, income_thousands, college_educ, bmi)
+
+Y <- data_obs_ltmle %>% pull(Y)
+A1 <- data_obs_ltmle %>% pull(A1)
+L1 <- data_obs_ltmle %>% pull(L1)
+L2 <- data_obs_ltmle %>% pull(L2)
+L3 <- data_obs_ltmle %>% pull(L3)
+A2 <- data_obs_ltmle %>% pull(A2)
+W <- data_obs_ltmle %>% select(-c(Y, A1, L1, L2, L3, A2))
+
+# Note: I removed the "SL.ksvm" wrapper because this caused the run time for this code chunk to exceed 3 hours. If we were conducting this analysis in real life, we would include the full set of SuperLearner algorithms for consistency throughout the phases of our analysis. 
+#sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.ksvm', 'SL.step')
+sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.step')
+
+# Naive Model Estimate
+ltmle_df <- data.frame(W, A1, L1, L2, L3, A2, Y)
+ltmle_result <- ltmle(ltmle_df, Anodes=c("A1", "A2"), Lnodes =c("L1", "L2", "L3"), Ynodes = "Y", abar=c(1,1), SL.library = sl_libs)
+
+summary(ltmle_result)
+```
+
+We noted minimal differences between our two estimates: in our naive model, which does not account for time-dependent confounding, our parameter estimate was 0.20574 . In our full LTMLE estimate, accounting for three time-varying confounders (blood pressure, cholesterol, and BMI) and two different intervention time points, the parameter estimate is 0.19544. Perhaps the similarities in these estimates suggest that the three time-varying confounders did not substantially differ between the two time points: it is plausible to consider that BMI, cholesterol levels, and blood pressure readings may stay relatively consistent over time.
 
 ## Discussion Questions
 
@@ -485,4 +533,5 @@ Use the `ltmle` package for this section. First fit a "naive model" that \textbf
     \item What sorts of time-dependent confounding should we be especially worried about? For instance, would we be concerned about a running variable for age the same way we might be concerned about blood pressure measured at two different times?
 \end{enumerate} 
 
+# Answer
 We would be most concerned about time-dependent confounders that do not change at the same rate across groups. So, in this example, we wouldn't be particularly concerned about a running variable for something like age, because this variable will change consistently across both groups: therefore, the common trends assumption is not violated. However, something that may change considerably across time across both groups may generate cause for greater concern, such as blood pressure measured at two different time points. 
