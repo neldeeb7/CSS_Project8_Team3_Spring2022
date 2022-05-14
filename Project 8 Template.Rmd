@@ -479,7 +479,9 @@ select(Y, A, sex_at_birth, simplified_race, income_thousands, college_educ, bmi,
 Y <- data_obs_naiveltmle %>% pull(Y)
 A <- data_obs_naiveltmle %>% pull(A)
 W <- data_obs_naiveltmle %>% select(-c(Y, A))
-  
+
+# Note: I removed the "SL.ksvm" wrapper because this caused the run time for this code chunk to exceed 3 hours. If we were conducting this analysis in real life, we would include the full set of SuperLearner algorithms for consistency throughout the phases of our analysis. 
+#sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.ksvm', 'SL.step')
 sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.step')
 
 # Naive Model Estimate
@@ -511,9 +513,8 @@ L3 <- data_obs_ltmle %>% pull(L3)
 A2 <- data_obs_ltmle %>% pull(A2)
 W <- data_obs_ltmle %>% select(-c(Y, A1, L1, L2, L3, A2))
 
-  
+# Note: I removed the "SL.ksvm" wrapper because this caused the run time for this code chunk to exceed 3 hours. If we were conducting this analysis in real life, we would include the full set of SuperLearner algorithms for consistency throughout the phases of our analysis. 
 #sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.ksvm', 'SL.step')
-
 sl_libs <- c('SL.glmnet', 'SL.glm', 'SL.mean', 'SL.step')
 
 # Naive Model Estimate
